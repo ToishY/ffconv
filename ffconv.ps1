@@ -272,7 +272,7 @@ function CheckFileStreams{
                 Write-Host ">> Multiple $var streams:~Index = "$stream["info_0"][$i]"~Codec = "$stream["info_1"][$i]"~Lang = "$stream["info_2"][$i]
             }
         }
-        [int]$stream_number = Read-Host ">> Multiple streams found. Please manually select your audio stream with the corresponding index"
+        [int]$stream_number = Read-Host ">> Multiple streams found. Please manually select your stream with the corresponding index"
         Write-Host ">> Your audio stream choice: $stream_number"
     }else{ #only 1 stream detected
         [int]$stream_number = $stream["info_0"][0]
