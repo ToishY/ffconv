@@ -1,4 +1,4 @@
-﻿<#
+<#
     .SYNOPSIS 
       Converts input files and hardcodes subtitles using FFMPEG
     .DESCRIPTION
@@ -111,6 +111,7 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$vd_preset = "",
     [string]$sb_preset = "",
+    [string]$sb_res = "",
     [string]$extension = "mp4"
 )
 #------------- ARGUMENTS END ------------- #
@@ -333,12 +334,15 @@ function SubOpts{
         [Parameter(Mandatory=$true)]
         [int]$stream_count,
         [Parameter(Mandatory=$false)]
-        [string]$sub_preset
+        [string]$sub_preset,
+        [Parameter(Mandatory=$false)]
+        [string]$res_adj
     )
 
+    $namev = $name
     #escape special characters to make it windows friendly for subtitle filter
     if($Env:OS -match "windows" -or $IsWindows){
-        $name = $name.Replace("\","\\").Replace(":","\:")
+        $namev = $name.Replace("\","\\").Replace(":","\:")
     }
 
     #subtitle offset stream from user input
@@ -346,9 +350,9 @@ function SubOpts{
     if($sub_index -and $sub_preset){
         #get string format of font styling preset
         $sb_string = Check-Presets -jsonFile $sub_preset -opt 1
-        $subs_map = ('"{0}"' -f "subtitles='$name':si=$ssa\:force_style='$sb_string'")
+        $subs_map = ('"{0}"' -f "subtitles='$namev':si=$ssa`:force_style='$sb_string'")
     }elseif($sub_index -and -not $sub_preset){
-        $subs_map = ('"{0}"' -f "subtitles='$name':si=$ssa")
+        $subs_map = ('"{0}"' -f "subtitles='$namev':si=$ssa")
     }else{
         Write-Error "No subtitle stream was given. Please check the input."
     }
@@ -357,6 +361,55 @@ function SubOpts{
     return $subs_map
 }
 
+function ExtractVideoSubs{
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$filename,
+        [Parameter(Mandatory=$true)]
+        [int]$sindex,
+        [Parameter(Mandatory=$true)]
+        [string]$jsonFile
+    )
+
+    #extract ass subs
+    $tpath = CheckOsDir(Split-Path -Path $filename)
+    $tpath += "tmp.ass"
+    
+    #double quote filename
+    $filename = '"{0}"' -f $filename
+
+    Write-Host ">> Starting extraction using MKVextract"
+    Start-Process 'mkvextract' -ArgumentList "tracks $filename $sindex`:$tpath" -NoNewWindow -Wait
+
+    #extract subs from mkv
+    $t = Get-Content -LiteralPath $tpath
+    #res x
+    [int]$xres = $t -match "PlayResX:\s(\d.*)" -replace '\D+(\d+)', '$1' | Select -Index 0
+    #res y
+    [int]$yres = $t -match "PlayResY:\s(\d.*)" -replace '\D+(\d+)', '$1' | Select -Index 0
+
+    #convert json to object
+    $jsonObject = Get-Content $jsonFile | ConvertFrom-Json
+    #create ordered hashtable for easy access
+    $htable = [ordered]@{}
+    #put content into table
+    $jsonObject.psobject.properties | Foreach { $htable[$_.Name] = [int]$_.Value }
+
+    if($htable["ResX"] -and $htable["ResY"] -and $htable["FontSize"]){
+        #get new fontsize for corresponding ass resolution
+        [int]$newFontSize = [math]::Round($htable["FontSize"] / ((($htable["ResX"] / $xres) + ($htable["ResY"] / $yres)) / 2))
+        Write-Host ">> Calculated new font size: $newFontSize"
+        [int]$marginV = [math]::Floor($newFontSize / 1.3334)
+        Write-Host ">> Calculated new vertical margin: $marginV`n"
+    }else{
+        Write-Error "The JSON file contained invalid keys and/or values. It must be in the following format: `n{'ResX':'1920','ResY':'1080','FontSize':'60'}"
+    }
+
+    #remove temporary ass
+    Remove-Item -LiteralPath $tpath
+    #return
+    return $newFontSize, $marginV
+}
 #------------- FUNCTIONS END -------------#
 
 #------------- BATCH START -------------#
@@ -405,8 +458,17 @@ if($batch -and !$name){
             #CREATE SUBTITLE MAP
             $subs_map = SubOpts -name $name -sub_index $sb_index -stream_count $not_subs_streams -sub_preset $sb_preset
 
+            #CHECK TO ADJUST FONTSIZE TO ASS FONT SIZE; REQUIRES MKVEXTRACT TO BE INSTALLED ON SYSTEM
+            if($sb_res){
+                $newFontSize, $marginV = ExtractVideoSubs -filename $name -sindex $sb_index -jsonFile $sb_res
+                #replace fontsize
+                $subs_map = $subs_map -replace ('FontSize=\d{1,}'), "FontSize=$newFontSize"
+                #replace margin
+                $subs_map = $subs_map -replace ('MarginV=\d{1,}'), "MarginV=$marginV"
+            }
+
             $name = '"{0}"' -f $name
-            Write-Host "Starting file"($i+1)"..."
+            Write-Host ">> File"($i+1)"..."
             #Create ffmpeg string
             $ffmpeg_command = "ffmpeg -i $name $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
             Write-Host ">> The following FFmpeg command will be run:`n"
@@ -415,17 +477,20 @@ if($batch -and !$name){
             Write-Host ">> Start conversion..."
             #Invoke ffmpeg string
             Invoke-Expression $ffmpeg_command
-            Write-Host ">> DONE"
-            Write-Host "File"($i+1)"completed"
+            Write-Host ">> File"($i+1)"completed"
         }else{
-            #CHECK SUBTITLE STREAM INFO
-            $sb_count, $sb_index = CheckFileStreams -stream $subtitle_stream -opt 2
-
             #CREATE SUBTITLE MAP
             $subs_map = SubOpts -name $name -sub_index $sb_index -stream_count $not_subs_streams -sub_preset $sb_preset
 
+            if($sb_res){
+                #replace fontsize
+                $subs_map = $subs_map -replace ('FontSize=\d{1,}'), "FontSize=$newFontSize"
+                #replace margin
+                $subs_map = $subs_map -replace ('MarginV=\d{1,}'), "MarginV=$marginV"
+            }
+
             $name = '"{0}"' -f $name
-            Write-Host "Starting file"($i+1)"..."
+            Write-Host ">> File"($i+1)"..."
             #Create ffmpeg string
             $ffmpeg_command = "ffmpeg -i $name $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
             Write-Host ">> The following FFmpeg command will be run:`n"
@@ -434,8 +499,7 @@ if($batch -and !$name){
             Write-Host ">> Start conversion..."
             #Invoke ffmpeg string
             Invoke-Expression $ffmpeg_command
-            Write-Host ">> DONE"
-            Write-Host "File"($i+1)"completed"
+            Write-Host ">> File"($i+1)"completed"
         }
     }
     #clear name
@@ -483,9 +547,18 @@ if($batch -and !$name){
         #CREATE SUBTITLE MAP
         $subs_map = SubOpts -name $name -sub_index $sb_index -stream_count $not_subs_streams -sub_preset $sb_preset
 
+        #CHECK TO ADJUST FONTSIZE TO ASS FONT SIZE; REQUIRES MKVEXTRACT TO BE INSTALLED ON SYSTEM
+        if($sb_res){
+            $newFontSize, $marginV = ExtractVideoSubs -filename $name -sindex $sb_index -jsonFile $sb_res
+            #replace fontsize
+            $subs_map = $subs_map -replace ('FontSize=\d{1,}'), "FontSize=$newFontSize"
+            #replace margin
+            $subs_map = $subs_map -replace ('MarginV=\d{1,}'), "MarginV=$marginV"
+        }
+
         $name = '"{0}"' -f $name
         #Create ffmpeg string
-        $ffmpeg_command = "ffmpeg -i $name $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
+        $ffmpeg_command = "ffmpeg -ss 0 -i $name -to 120 $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
         Write-Host ">> The following FFmpeg command will be run:`n"
         Write-Host $ffmpeg_command`n
         Start-Sleep -m 1500
