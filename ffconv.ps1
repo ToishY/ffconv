@@ -19,6 +19,8 @@
       >> WINDOWS
       # Single file conversion (forcing new subtitle styles)
       powershell -executionpolicy bypass -File .\ffconv.ps1 -name "C:\path\to\awesome-video.mkv" -vd_preset "C:\path\to\video_preset.json" -sb_preset "C:\path\to\subs_preset.json" -output_dir "helloworld"
+      # Single file conversion (forcing new subtitle styles)
+      powershell -executionpolicy bypass -File .\ffconv.ps1 -name "C:\path\to\awesome-video.mkv" -vd_preset "C:\path\to\video_preset.json" -sb_preset "C:\path\to\subs_preset.json" -sb_res "C:\path\to\resolution.json" -output_dir "helloworld"
     .NOTES
       >> INDEXING
       In order for the script to work normally (especially in batch mode), the input files should have already been properly indexed beforehand. This is actually the task of 
