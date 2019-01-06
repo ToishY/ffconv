@@ -9,18 +9,18 @@
     .EXAMPLE
       >> LINUX
       # Single file conversion (without forcing new subtitle styles)
-      pwsh ffconv.ps1 -name "/home/files/my-awesome-video.mkv" -vd_preset "/path/to/video/preset.json" -output_dir "/home/files"
+      pwsh ffconv.ps1 -file "/my/input/file.mkv" -vd_preset "/path/to/video_preset.json" -output_dir "/my/single/dir/out"
       # Single file conversion (forcing new subtitle styles)
-      pwsh ffconv.ps1-name "/home/files/my-awesome-video.mkv" -vd_preset "/path/to/video/preset.json" -sb_preset "/path/to/subs/preset.json" -output_dir "/home/files"
+      pwsh ffconv.ps1 -file "/my/input/file.mkv" -vd_preset "/path/to/video_preset.json" -sb_preset "/path/to/subs_preset.json" -output_dir "/my/single/dir/out"
       # Batch conversion (without forcing new subtitle styles)
-      pwsh ffconv.ps1 -batch "/my/batch/dir/in" -vd_preset "/path/to/video/preset.json" -ouput_dir "/my/batch/dir/out"
+      pwsh ffconv.ps1 -file "/my/input/dir" -vd_preset "/path/to/video_preset.json" -ouput_dir "/my/batch/dir/out"
       # Batch conversion (forcing new subtitle styles)
-      pwsh ffconv.ps1 -batch "/my/batch/dir/in" -vd_preset "/path/to/video/preset.json" -sb_preset "/path/to/subs/preset.json" -ouput_dir "/my/batch/dir/out"
+      pwsh ffconv.ps1 -file "/my/input/dir" -vd_preset "/path/to/video_preset.json" -sb_preset "/path/to/subs_preset.json" -ouput_dir "/my/batch/dir/out"
       >> WINDOWS
-      # Single file conversion (forcing new subtitle styles)
-      powershell -executionpolicy bypass -File .\ffconv.ps1 -name "C:\path\to\awesome-video.mkv" -vd_preset "C:\path\to\video_preset.json" -sb_preset "C:\path\to\subs_preset.json" -output_dir "helloworld"
-      # Single file conversion (forcing new subtitle styles)
-      powershell -executionpolicy bypass -File .\ffconv.ps1 -name "C:\path\to\awesome-video.mkv" -vd_preset "C:\path\to\video_preset.json" -sb_preset "C:\path\to\subs_preset.json" -sb_res "C:\path\to\resolution.json" -output_dir "helloworld"
+      # Single file conversion (without forcing new subtitle styles)
+      powershell -executionpolicy bypass -File .\ffconv.ps1 -file "/my/input/file.mkv" -vd_preset "/path/to/video_preset.json" -output_dir "helloworld"
+      # Batch file conversion (forcing new subtitle styles)
+      powershell -executionpolicy bypass -File .\ffconv.ps1 -file "/my/input/dir" -vd_preset "/path/to/video_preset.json" -sb_preset "/path/to/subs_preset.json" -output_dir "/my/batch/dir/out"
     .NOTES
       >> INDEXING
       In order for the script to work normally (especially in batch mode), the input files should have already been properly indexed beforehand. This is actually the task of 
@@ -29,31 +29,31 @@
       dragging the streams in the right order and then remuxing the file.
          
       #RIGHT
-      [STREAM] index=0; codec_type=video [/STREAM]
-      [STREAM] index=1; codec_type=audio [/STREAM]
-      [STREAM] index=2; codec_type=audio [/STREAM]
-      [STREAM] index=3; codec_type=subtitle [/STREAM]
-      [STREAM] index=4; codec_type=subtitle [/STREAM]
+      [STREAM] index=0; codec_type=video      [/STREAM]
+      [STREAM] index=1; codec_type=audio      [/STREAM]
+      [STREAM] index=2; codec_type=audio      [/STREAM]
+      [STREAM] index=3; codec_type=subtitle   [/STREAM]
+      [STREAM] index=4; codec_type=subtitle   [/STREAM]
       [STREAM] index=5; codec_type=attachment [/STREAM]
       [STREAM] index=6; codec_type=attachment [/STREAM]
 
       #WRONG
-      [STREAM] index=0; codec_type=video [/STREAM]
-      [STREAM] index=1; codec_type=audio [/STREAM]
-      [STREAM] index=2; codec_type=subtitle [/STREAM]
-      [STREAM] index=3; codec_type=subtitle [/STREAM]
-      [STREAM] index=4; codec_type=audio [/STREAM]
+      [STREAM] index=0; codec_type=video      [/STREAM]
+      [STREAM] index=1; codec_type=audio      [/STREAM]
+      [STREAM] index=2; codec_type=subtitle   [/STREAM]
+      [STREAM] index=3; codec_type=subtitle   [/STREAM]
+      [STREAM] index=4; codec_type=audio      [/STREAM]
       [STREAM] index=5; codec_type=attachment [/STREAM]
       [STREAM] index=6; codec_type=attachment [/STREAM]
 
       #WRONG
       [STREAM] index=0; codec_type=attachment [/STREAM]
-      [STREAM] index=1; codec_type=audio [/STREAM]
-      [STREAM] index=2; codec_type=video [/STREAM]
-      [STREAM] index=3; codec_type=subtitle [/STREAM]
-      [STREAM] index=4; codec_type=audio [/STREAM]
+      [STREAM] index=1; codec_type=audio      [/STREAM]
+      [STREAM] index=2; codec_type=video      [/STREAM]
+      [STREAM] index=3; codec_type=subtitle   [/STREAM]
+      [STREAM] index=4; codec_type=audio      [/STREAM]
       [STREAM] index=5; codec_type=attachment [/STREAM]
-      [STREAM] index=6; codec_type=subtitle [/STREAM]
+      [STREAM] index=6; codec_type=subtitle   [/STREAM]
 
       >> AMOUNT OF STREAMS
       Make sure that if you are going for batch mode, that your input files have the same amount of (video and) audio streams. I say this because I've seen the script
@@ -106,14 +106,13 @@
 
 #------------- ARGUMENTS START ------------- #
 param (
-    [string]$name = "",
-    [string]$batch = "",#folder location
     [Parameter(Mandatory=$true)]
-    [string]$output_dir, #output directory
+    [string]$file,
+    [Parameter(Mandatory=$true)]
+    [string]$output_dir,
     [Parameter(Mandatory=$true)]
     [string]$vd_preset = "",
     [string]$sb_preset = "",
-    [string]$sb_res = "",
     [string]$extension = "mp4"
 )
 #------------- ARGUMENTS END ------------- #
@@ -270,13 +269,13 @@ function CheckFileStreams{
     if($aos -gt 1){ #multiple streams; user input required
         for($i = 0;$i -lt $aos;$i++){
             if($opt -eq 0){
-                Write-Host ">> Multiple $var streams:~Index = "$stream["info_0"][$i]"~Codec = "$stream["info_1"][$i]"~PIX_FMT = "$stream["info_2"][$i]
+                Write-Host ">> Multiple $var streams: Index = "$stream["info_0"][$i]"; Codec = "$stream["info_1"][$i]"; PIX_FMT = "$stream["info_2"][$i]
             }else{
-                Write-Host ">> Multiple $var streams:~Index = "$stream["info_0"][$i]"~Codec = "$stream["info_1"][$i]"~Lang = "$stream["info_2"][$i]
+                Write-Host ">> Multiple $var streams: Index = "$stream["info_0"][$i]"; Codec = "$stream["info_1"][$i]"; Lang = "$stream["info_2"][$i]
             }
         }
         [int]$stream_number = Read-Host ">> Multiple streams found. Please manually select your stream with the corresponding index"
-        Write-Host ">> Your audio stream choice: $stream_number"
+        Write-Host ">> Your stream choice: $stream_number"
     }else{ #only 1 stream detected
         [int]$stream_number = $stream["info_0"][0]
         Write-Host ">> One $var stream was automatically detected for mapping."
@@ -327,95 +326,129 @@ function AudOpts{
     return $ad_map, $ad_string
 }
 
-function SubOpts{
-    Param(
-        [Parameter(Mandatory=$true)]
-        [string]$name,
-        [Parameter(Mandatory=$false)]
-        [int]$sub_index,
-        [Parameter(Mandatory=$true)]
-        [int]$stream_count,
-        [Parameter(Mandatory=$false)]
-        [string]$sub_preset,
-        [Parameter(Mandatory=$false)]
-        [string]$res_adj
-    )
-
-    $namev = $name
-    #escape special characters to make it windows friendly for subtitle filter
-    if($Env:OS -match "windows" -or $IsWindows){
-        $namev = $name.Replace("\","\\").Replace(":","\:")
-    }
-
-    #subtitle offset stream from user input
-    [string]$ssa = $sub_index - $stream_count
-    if($sub_index -and $sub_preset){
-        #get string format of font styling preset
-        $sb_string = Check-Presets -jsonFile $sub_preset -opt 1
-        $subs_map = ('"{0}"' -f "subtitles='$namev':si=$ssa`:force_style='$sb_string'")
-    }elseif($sub_index -and -not $sub_preset){
-        $subs_map = ('"{0}"' -f "subtitles='$namev':si=$ssa")
-    }else{
-        Write-Error "No subtitle stream was given. Please check the input."
-    }
-
-    $subs_map = "-filter_complex $subs_map"
-    return $subs_map
-}
-
 function ExtractVideoSubs{
     Param(
         [Parameter(Mandatory=$true)]
-        [string]$filename,
+        [string]$fileName,
+        [Parameter(Mandatory=$true)]
+        [int]$vindex,
+        [Parameter(Mandatory=$true)]
+        [int]$aindex,
         [Parameter(Mandatory=$true)]
         [int]$sindex,
         [Parameter(Mandatory=$true)]
+        [int]$stream_count,
+        [Parameter(Mandatory=$false)]
         [string]$jsonFile
     )
 
-    #extract ass subs
-    $tpath = CheckOsDir(Split-Path -Path $filename)
-    $tpath += "tmp.ass"
+    if($jsonFile){
+
+        $tpath = CheckOsDir([System.IO.Path]::GetDirectoryName($fileName))
+        $renamedOrigin = ([System.IO.Path]::GetFileNameWithoutExtension($fileName)) + "(0)" + ([System.IO.Path]::GetExtension($fileName))
+        Rename-Item -LiteralPath $fileName -NewName $renamedOrigin -Force
+        $renamedOrigin = "$tpath" + $renamedOrigin
+
+        <# MKVEXTRACT #>
+
+        #get path for temp ass subs
+        $subs = "$tpath" + "tmp.ass"
     
-    #double quote filename
-    $filename = '"{0}"' -f $filename
+        #double quote filename
+        $renamedOrigin = '"{0}"' -f $renamedOrigin
 
-    Write-Host ">> Starting extraction using MKVextract"
-    Start-Process 'mkvextract' -ArgumentList "tracks $filename $sindex`:$tpath" -NoNewWindow -Wait
+        Write-Host ">> Starting extraction using MKVextract"
+        Start-Process 'mkvextract' -ArgumentList "tracks $renamedOrigin $sindex`:$subs" -NoNewWindow -Wait
+        Write-Host ">> Done extracting ASS"
 
-    #extract subs from mkv
-    $t = Get-Content -LiteralPath $tpath
-    #res x
-    [int]$xres = $t -match "PlayResX:\s(\d.*)" -replace '\D+(\d+)', '$1' | Select -Index 0
-    #res y
-    [int]$yres = $t -match "PlayResY:\s(\d.*)" -replace '\D+(\d+)', '$1' | Select -Index 0
+        <# MKVMERGE #>
 
-    #convert json to object
-    $jsonObject = Get-Content $jsonFile | ConvertFrom-Json
-    #create ordered hashtable for easy access
-    $htable = [ordered]@{}
-    #put content into table
-    $jsonObject.psobject.properties | Foreach { $htable[$_.Name] = [int]$_.Value }
+        #JSON FILE EXTRA
+        $jsonObject = Get-Content $jsonFile | ConvertFrom-Json
+        $htableExcp = [ordered]@{}
+        $jsonObject.psobject.properties | Foreach { $htableExcp[$_.Name] = $_.Value}
 
-    if($htable["ResX"] -and $htable["ResY"] -and $htable["FontSize"]){
-        #get new fontsize for corresponding ass resolution
-        [int]$newFontSize = [math]::Round($htable["FontSize"] / ((($htable["ResX"] / $xres) + ($htable["ResY"] / $yres)) / 2))
-        Write-Host ">> Calculated new font size: $newFontSize"
-        [int]$marginV = [math]::Floor($newFontSize / 1.3334)
-        Write-Host ">> Calculated new vertical margin: $marginV`n"
-    }else{
-        Write-Error "The JSON file contained invalid keys and/or values. It must be in the following format: `n{'ResX':'1920','ResY':'1080','FontSize':'60'}"
+        #SUBTITLE FILE
+        $ASS = Get-Content -LiteralPath $subs
+
+        #GET STYLES
+        $t = ($ASS -match "Style:\s(\D.*)").Replace("Style: ","")
+        [int]$xres = ($ASS -match "PlayResX:\s(\d.*)").Replace("PlayResX: ","")
+        [int]$yres = ($ASS -match "PlayResY:\s(\d.*)").Replace("PlayResY: ","")
+        $keys = ($ASS -match "Format:\s(\D.*)Encoding").Replace("Format: ","").split(", ").Where({ $_ -ne "" })
+
+        $uresx = [int]$htableExcp["ResX"]
+        $uresy = [int]$htableExcp["ResY"]
+        if(($uresx -gt $xres) -and ($uresy -gt $yres)){
+            [double]$fac = [math]::Round(((($uresx / $xres) + ($uresy / $yres)) / 2),2)
+        }else{
+            [double]$fac = [math]::Round(((($xres / $uresx) + ($yres / $uresy)) / 2), 2)
+        }
+
+        #remove first resx/resy from hash for further use
+        $htableExcp.Remove("ResX")
+        $htableExcp.Remove("ResY")
+
+        #LOOP OVER STYLES
+        foreach($elem in $t){
+            $tmp = $elem.split(",")
+            $tmpHtable = [ordered]@{}
+            for($i = 0;$i -lt $keys.Count;$i++){
+                $tmpHtable[$keys[$i]] = $tmp[$i]
+                if($htableExcp[$keys[$i]]){
+                    #resample
+                    if(([string]$keys[$i] -eq "FontSize") -or ([string]$keys[$i] -eq "MarginL") -or ([string]$keys[$i] -eq "MarginR") -or ([string]$keys[$i] -eq "MarginV")){
+                        if([math]::Round([double]$tmpHtable[$keys[$i]] * $fac) -gt $htableExcp[$keys[$i]]){
+                            $tmpHtable[$keys[$i]] = $htableExcp[$keys[$i]]
+                        }else{
+                            $tmpHtable[$keys[$i]] = [math]::Round([double]$tmpHtable[$keys[$i]] * $fac)
+                        }
+                    }elseif(([string]$keys[$i] -eq "Outline") -or ([string]$keys[$i] -eq "Shadow")){
+                        $tmpHtable[$keys[$i]] = [string]([math]::Round(([double]$htableExcp[$keys[$i]] * $fac),2))
+                    }else{
+                        $tmpHtable[$keys[$i]] = $htableExcp[$keys[$i]]
+                    }
+                }
+            }
+
+            $v = New-Object System.Collections.Generic.List[System.Object]
+            foreach ($h in $tmpHtable.GetEnumerator()){
+                $v.Add($($h.Value))
+            }
+
+            $res = $v -join ","
+            $ASS = $ASS.Replace($elem,$res)
+        }
+
+        $ASS = $ASS -replace "PlayResX:\s(\d.*)" , "PlayResX: $uresx"
+        $ASS = $ASS -replace "PlayResY:\s(\d.*)" , "PlayResY: $uresy"
+
+        Set-Content -LiteralPath $subs -Value $ASS
+        $args = ("--output '$fileName' --no-subtitles --language $vindex`:und --default-track $vindex`:yes --language $aindex`:und --default-track $aindex`:yes '(' $renamedOrigin ')' --language 0:eng --track-name 0:English '(' '$subs' ')' --track-order 0:0,0:1,1:0").Replace("'",'"')
+        Write-Host ">> Starting merge of ASS & inputfile using MKVmerge"
+        Start-Process 'mkvmerge' -ArgumentList $args -NoNewWindow -Wait
+        Write-Host ">> Merging done"
+        #Remove-Item -LiteralPath $subs -Force
     }
 
-    #remove temporary ass
-    Remove-Item -LiteralPath $tpath
-    #return
-    return $newFontSize, $marginV
+    #escape special characters to make it windows friendly for subtitle filter
+    if($Env:OS -match "windows" -or $IsWindows){
+        $fileName = $fileName.Replace("\","\\").Replace(":","\:")
+    }
+
+    #subtitle offset stream from user input
+    [string]$ssa = $sindex - $stream_count
+
+    #subs map
+    $subs_map = ('"{0}"' -f "subtitles='$fileName':si=$ssa")
+    $subs_map = "-filter_complex $subs_map"
+    return $subs_map
 }
 #------------- FUNCTIONS END -------------#
 
-#------------- BATCH START -------------#
-if($batch -and !$name){
+if(Test-Path -LiteralPath $file -PathType Container){
+    Write-Host ">> Input type: folder; batch mode"
+    $batch = $file
     $files = Get-ChildItem "$batch"
     #Prepare output dir
     $morb = Create-Directory($output_dir)
@@ -458,16 +491,7 @@ if($batch -and !$name){
             $sb_count, $sb_index = CheckFileStreams -stream $subtitle_stream -opt 2
 
             #CREATE SUBTITLE MAP
-            $subs_map = SubOpts -name $name -sub_index $sb_index -stream_count $not_subs_streams -sub_preset $sb_preset
-
-            #CHECK TO ADJUST FONTSIZE TO ASS FONT SIZE; REQUIRES MKVEXTRACT TO BE INSTALLED ON SYSTEM
-            if($sb_res){
-                $newFontSize, $marginV = ExtractVideoSubs -filename $name -sindex $sb_index -jsonFile $sb_res
-                #replace fontsize
-                $subs_map = $subs_map -replace ('FontSize=\d{1,}'), "FontSize=$newFontSize"
-                #replace margin
-                $subs_map = $subs_map -replace ('MarginV=\d{1,}'), "MarginV=$marginV"
-            }
+            $subs_map = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
 
             $name = '"{0}"' -f $name
             Write-Host ">> File"($i+1)"..."
@@ -482,14 +506,7 @@ if($batch -and !$name){
             Write-Host ">> File"($i+1)"completed"
         }else{
             #CREATE SUBTITLE MAP
-            $subs_map = SubOpts -name $name -sub_index $sb_index -stream_count $not_subs_streams -sub_preset $sb_preset
-
-            if($sb_res){
-                #replace fontsize
-                $subs_map = $subs_map -replace ('FontSize=\d{1,}'), "FontSize=$newFontSize"
-                #replace margin
-                $subs_map = $subs_map -replace ('MarginV=\d{1,}'), "MarginV=$marginV"
-            }
+            $subs_map = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
 
             $name = '"{0}"' -f $name
             Write-Host ">> File"($i+1)"..."
@@ -510,7 +527,9 @@ if($batch -and !$name){
 #------------- BATCH END -------------#
 
 #------------- SINGLE START -------------#
-}elseif(!$batch -and $name){
+}elseif(Test-Path -LiteralPath $file -PathType Leaf){
+    Write-Host ">> Input type: file; single mode"
+    $name = $file
     #Prepare output dir
     $morb = Create-Directory($output_dir)
     if($morb.Fullname){
@@ -547,16 +566,7 @@ if($batch -and !$name){
         $sb_count, $sb_index = CheckFileStreams -stream $subtitle_stream -opt 2
 
         #CREATE SUBTITLE MAP
-        $subs_map = SubOpts -name $name -sub_index $sb_index -stream_count $not_subs_streams -sub_preset $sb_preset
-
-        #CHECK TO ADJUST FONTSIZE TO ASS FONT SIZE; REQUIRES MKVEXTRACT TO BE INSTALLED ON SYSTEM
-        if($sb_res){
-            $newFontSize, $marginV = ExtractVideoSubs -filename $name -sindex $sb_index -jsonFile $sb_res
-            #replace fontsize
-            $subs_map = $subs_map -replace ('FontSize=\d{1,}'), "FontSize=$newFontSize"
-            #replace margin
-            $subs_map = $subs_map -replace ('MarginV=\d{1,}'), "MarginV=$marginV"
-        }
+        $subs_map = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
 
         $name = '"{0}"' -f $name
         #Create ffmpeg string
@@ -573,5 +583,5 @@ if($batch -and !$name){
     }
 #------------- SINGLE END -------------#
 }else{
-    Write-Error "No filename was passed as input argument, please check again"
+    Write-Error "No (valid) filename was passed as input argument, please check again"
 }
