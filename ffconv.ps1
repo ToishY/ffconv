@@ -428,7 +428,7 @@ function ExtractVideoSubs{
         Write-Host ">> Starting merge of ASS & inputfile using MKVmerge"
         Start-Process 'mkvmerge' -ArgumentList $args -NoNewWindow -Wait
         Write-Host ">> Merging done"
-        #Remove-Item -LiteralPath $subs -Force
+        Remove-Item -LiteralPath $subs -Force
     }
 
     #escape special characters to make it windows friendly for subtitle filter
