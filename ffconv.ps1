@@ -570,7 +570,7 @@ if(Test-Path -LiteralPath $file -PathType Container){
 
         $name = '"{0}"' -f $name
         #Create ffmpeg string
-        $ffmpeg_command = "ffmpeg -ss 0 -i $name -to 120 $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
+        $ffmpeg_command = "ffmpeg -i $name $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
         Write-Host ">> The following FFmpeg command will be run:`n"
         Write-Host $ffmpeg_command`n
         Start-Sleep -m 1500
