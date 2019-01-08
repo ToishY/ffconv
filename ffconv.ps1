@@ -101,7 +101,7 @@
     .CREDITS
       Made by:        YTerZ
       Github:         https://github.com/YTerZ/ffconv
-      Last modified:  31-12-2018 17:22
+      Last modified:  7-1-2018 15:59
 #>
 
 #------------- ARGUMENTS START ------------- #
@@ -194,10 +194,10 @@ function Create-Directory{
 
     #check if dir not yet exists
     if (!($mdir | Test-Path)){
-        Write-Host ">> Given directory does not exists; creating new folder`n"
+        Write-Host ">> Given directory does not exists; creating new folder"
         New-Item -ItemType "directory" -Path "$mdir"
     }else{
-        Write-Host ">> Given directory exists; not creating new folder`n"
+        Write-Host ">> Given directory exists; not creating new folder"
     }
     return $mdir
 }
@@ -269,9 +269,9 @@ function CheckFileStreams{
     if($aos -gt 1){ #multiple streams; user input required
         for($i = 0;$i -lt $aos;$i++){
             if($opt -eq 0){
-                Write-Host ">> Multiple $var streams: Index = "$stream["info_0"][$i]"; Codec = "$stream["info_1"][$i]"; PIX_FMT = "$stream["info_2"][$i]
+                Write-Host ">>> Multiple $var streams: Index = "$stream["info_0"][$i]"; Codec = "$stream["info_1"][$i]"; PIX_FMT = "$stream["info_2"][$i]
             }else{
-                Write-Host ">> Multiple $var streams: Index = "$stream["info_0"][$i]"; Codec = "$stream["info_1"][$i]"; Lang = "$stream["info_2"][$i]
+                Write-Host ">>> Multiple $var streams: Index = "$stream["info_0"][$i]"; Codec = "$stream["info_1"][$i]"; Lang = "$stream["info_2"][$i]
             }
         }
         [int]$stream_number = Read-Host ">> Multiple streams found. Please manually select your stream with the corresponding index"
@@ -379,33 +379,55 @@ function ExtractVideoSubs{
 
         $uresx = [int]$htableExcp["ResX"]
         $uresy = [int]$htableExcp["ResY"]
-        if(($uresx -gt $xres) -and ($uresy -gt $yres)){
-            [double]$fac = [math]::Round(((($uresx / $xres) + ($uresy / $yres)) / 2),2)
-        }else{
-            [double]$fac = [math]::Round(((($xres / $uresx) + ($yres / $uresy)) / 2), 2)
-        }
-
+        $mean = (($uresy / $yres) + ($uresx / $xres)) / 2
+ 
         #remove first resx/resy from hash for further use
         $htableExcp.Remove("ResX")
         $htableExcp.Remove("ResY")
 
         #LOOP OVER STYLES
+        $j = 0
         foreach($elem in $t){
             $tmp = $elem.split(",")
             $tmpHtable = [ordered]@{}
             for($i = 0;$i -lt $keys.Count;$i++){
                 $tmpHtable[$keys[$i]] = $tmp[$i]
+                if((-not ($htableExcp["FontSize"]) -and ([string]$keys[$i] -eq "FontSize")) -or ([string]$keys[$i] -eq "MarginL") -or ([string]$keys[$i] -eq "MarginR") -or ([string]$keys[$i] -eq "MarginV")){
+                    $tmpHtable[$keys[$i]] = [math]::Round([int]$tmpHtable[$keys[$i]] * $mean)
+                }
+
                 if($htableExcp[$keys[$i]]){
-                    #resample
-                    if(([string]$keys[$i] -eq "FontSize") -or ([string]$keys[$i] -eq "MarginL") -or ([string]$keys[$i] -eq "MarginR") -or ([string]$keys[$i] -eq "MarginV")){
-                        if([math]::Round([double]$tmpHtable[$keys[$i]] * $fac) -gt $htableExcp[$keys[$i]]){
-                            $tmpHtable[$keys[$i]] = $htableExcp[$keys[$i]]
-                        }else{
-                            $tmpHtable[$keys[$i]] = [math]::Round([double]$tmpHtable[$keys[$i]] * $fac)
+                    #adjust fontsize
+                    if([string]$keys[$i] -eq "FontSize"){
+                        #adjust all proportionally to given user fontsize
+                        if($j -eq 0){
+                            $font_factor = [math]::Round([int]$htableExcp[$keys[$i]] / [int]$tmpHtable[$keys[$i]],2)
                         }
-                    }elseif(([string]$keys[$i] -eq "Outline") -or ([string]$keys[$i] -eq "Shadow")){
-                        $tmpHtable[$keys[$i]] = [string]([math]::Round(([double]$htableExcp[$keys[$i]] * $fac),2))
+                        $tmpHtable[$keys[$i]] = [math]::Round([int]$tmpHtable[$keys[$i]] * $font_factor)
+                    }elseif(([string]$keys[$i] -eq "MarginL") -or ([string]$keys[$i] -eq "MarginR") -or ([string]$keys[$i] -eq "MarginV")){
+                    #adjust margin
+                        if([int]$htableExcp[$keys[$i]] -gt 0){ #positive; static; adjust all styles to given user margin
+                            $tmpHtable[$keys[$i]] = $htableExcp[$keys[$i]]
+                        }else{ #negative; dynamic; adjust all styles with subtracting user margin
+                            if($j -eq 0){
+                                if([string]$keys[$i] -eq "MarginV"){
+                                    if([int]$tmpHtable[$keys[$i]] -gt 25){
+                                        $margin_factor = [int]$htableExcp[$keys[$i]]
+                                    }else{
+                                        $margin_factor = 0
+                                    }
+                                }else{
+                                    if(([int]$tmpHtable[$keys[$i]]) -gt [math]::Abs($htableExcp[$keys[$i]])){
+                                        $margin_factor = [int]$htableExcp[$keys[$i]]
+                                    }else{
+                                        $margin_factor = 0
+                                    }
+                                }
+                            }
+                            $tmpHtable[$keys[$i]] = $tmpHtable[$keys[$i]] + $margin_factor
+                        }
                     }else{
+                    #all other styles force to user preference
                         $tmpHtable[$keys[$i]] = $htableExcp[$keys[$i]]
                     }
                 }
@@ -418,6 +440,8 @@ function ExtractVideoSubs{
 
             $res = $v -join ","
             $ASS = $ASS.Replace($elem,$res)
+            #increment
+            $j++
         }
 
         $ASS = $ASS -replace "PlayResX:\s(\d.*)" , "PlayResX: $uresx"
