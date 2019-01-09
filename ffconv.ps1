@@ -343,7 +343,6 @@ function ExtractVideoSubs{
     )
 
     if($jsonFile){
-
         $tpath = CheckOsDir([System.IO.Path]::GetDirectoryName($fileName))
         $renamedOrigin = ([System.IO.Path]::GetFileNameWithoutExtension($fileName)) + "(0)" + ([System.IO.Path]::GetExtension($fileName))
         Rename-Item -LiteralPath $fileName -NewName $renamedOrigin -Force
@@ -371,6 +370,20 @@ function ExtractVideoSubs{
         #SUBTITLE FILE
         $ASS = Get-Content -LiteralPath $subs
 
+        #Remove non-used styles
+        foreach($elem in ($ASS -match "Style:\s(\D.*)").Replace("Style: ","")){
+            $tmp = $elem.split(",") | Select-Object -Index 0
+            if($tmp){
+                $str = ',' + $tmp + ','
+                [int]$occ = (Select-String -InputObject $ASS -Pattern $str -AllMatches).Matches.Count
+                #check if the first assigned actor/name is actually used, else remove
+                if($occ -le 0){
+                    $ASS = $ASS -ne "Style: $elem"
+                    Write-Host ">>>Removed stylename '$tmp' because it does not appear in ASS"
+                }
+            }
+        }
+
         #GET STYLES
         $t = ($ASS -match "Style:\s(\D.*)").Replace("Style: ","")
         [int]$xres = ($ASS -match "PlayResX:\s(\d.*)").Replace("PlayResX: ","")
@@ -386,12 +399,14 @@ function ExtractVideoSubs{
         $htableExcp.Remove("ResY")
 
         #LOOP OVER STYLES
-        $j = 0
+        $j = 0 #loop increment
         foreach($elem in $t){
             $tmp = $elem.split(",")
             $tmpHtable = [ordered]@{}
             for($i = 0;$i -lt $keys.Count;$i++){
                 $tmpHtable[$keys[$i]] = $tmp[$i]
+
+                #continue
                 if((-not ($htableExcp["FontSize"]) -and ([string]$keys[$i] -eq "FontSize")) -or ([string]$keys[$i] -eq "MarginL") -or ([string]$keys[$i] -eq "MarginR") -or ([string]$keys[$i] -eq "MarginV")){
                     $tmpHtable[$keys[$i]] = [math]::Round([int]$tmpHtable[$keys[$i]] * $mean)
                 }
@@ -600,7 +615,7 @@ if(Test-Path -LiteralPath $file -PathType Container){
         Start-Sleep -m 1500
         Write-Host ">> Start conversion..."
         #Invoke ffmpeg string
-        Invoke-Expression $ffmpeg_command
+        #Invoke-Expression $ffmpeg_command
         Write-Host ">> DONE"
     }else{
         Write-Error "This file does not exist in the specified directory, please check again"
