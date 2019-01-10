@@ -19,8 +19,8 @@ The following arguments are available for ffconv:
 - ffmpeg encoding setings (-vd_preset; required)
 - output directory (-output_dir; required)
 - subtitle forced styles (-sb_preset; optional)
-- remove original/input file (-remove_origin; optional; accepts "Y" or "y")
-- remove temporary file (-remove_temp; optional; accepts "Y" or "y"; will only be available if -sb_preset is used)
+- remove original/input file (-remove_origin; optional; accepts "Y"/"y" -or "N"/"n")
+- remove temporary file (-remove_temp; optional; accepts "Y"/"y" -or "N"/"n"; will only be available if -sb_preset is used)
 
 The default subtitle font and styling can be forced to something else by changing the settings in the `subs_preset.json`. A section on how to change some of these settings is provided in a word document.
 
