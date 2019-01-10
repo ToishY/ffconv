@@ -101,7 +101,7 @@
     .CREDITS
       Made by:        YTerZ
       Github:         https://github.com/YTerZ/ffconv
-      Last modified:  7-1-2018 15:59
+      Last modified:  10-1-2019 02:24
 #>
 
 #------------- ARGUMENTS START ------------- #
