@@ -113,6 +113,8 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$vd_preset = "",
     [string]$sb_preset = "",
+    [string]$remove_origin = "N",
+    [string]$remove_temp = "N",
     [string]$extension = "mp4"
 )
 #------------- ARGUMENTS END ------------- #
@@ -346,7 +348,7 @@ function ExtractVideoSubs{
         $tpath = CheckOsDir([System.IO.Path]::GetDirectoryName($fileName))
         $renamedOrigin = ([System.IO.Path]::GetFileNameWithoutExtension($fileName)) + "(0)" + ([System.IO.Path]::GetExtension($fileName))
         Rename-Item -LiteralPath $fileName -NewName $renamedOrigin -Force
-        $renamedOrigin = "$tpath" + $renamedOrigin
+        $renamedOriginN = "$tpath" + $renamedOrigin
 
         <# MKVEXTRACT #>
 
@@ -354,7 +356,7 @@ function ExtractVideoSubs{
         $subs = "$tpath" + "tmp.ass"
     
         #double quote filename
-        $renamedOrigin = '"{0}"' -f $renamedOrigin
+        $renamedOrigin = '"{0}"' -f $renamedOriginN
 
         Write-Host ">> Starting extraction using MKVextract"
         Start-Process 'mkvextract' -ArgumentList "tracks $renamedOrigin $sindex`:$subs" -NoNewWindow -Wait
@@ -481,7 +483,50 @@ function ExtractVideoSubs{
     #subs map
     $subs_map = ('"{0}"' -f "subtitles='$fileName':si=$ssa")
     $subs_map = "-filter_complex $subs_map"
-    return $subs_map
+    return $subs_map, $renamedOriginN
+}
+
+function CleanUpFiles(){
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$origin_file,
+        [Parameter(Mandatory=$false)]
+        [string]$interm_file,
+        [Parameter(Mandatory=$false)]
+        [string]$olc,
+        [Parameter(Mandatory=$false)]
+        [string]$ilc
+    )
+
+    $origin_file = $origin_file.replace('"','')
+    # Y = remove; N = kept
+    if($origin_file -and $interm_file){
+        if(($olc.ToLower() -eq "y") -and ($ilc.ToLower() -eq "y")){
+            Remove-Item -LiteralPath $origin_file
+            Remove-Item -LiteralPath $interm_file
+            Write-Host ">> Input and temporary file(s) was/were kept."
+        }elseif(($olc.ToLower() -eq "n") -and ($ilc.ToLower() -eq "y")){
+            #remove intermediate filename (was set to original filename)
+            Remove-Item -LiteralPath $origin_file -Force
+            #rename the original filename
+            Rename-Item -LiteralPath $interm_file -NewName (Split-Path -Path $origin_file -Leaf)
+            Write-Host ">> Input file(s) was/were kept. Temporary file(s) removed."
+        }elseif(($olc.ToLower() -eq "y") -and ($ilc.ToLower() -eq "n")){
+            #remove intermediate filename (was set to original filename)
+            Remove-Item -LiteralPath $interm_file -Force
+            Write-Host ">> Input file(s) was/were removed. Temporary file(s) kept."
+        }else{
+            Write-Host ">> Input file(s) was/were kept."
+        }
+    }elseif($origin_file){
+        if($olc.ToLower() -eq "y"){
+            Remove-Item -LiteralPath $origin_file
+        }else{
+            Write-Host ">> Input file(s) was/were kept."
+        }
+    }else{
+        Write-Host ">> Input file(s) was/were kept."
+    }
 }
 #------------- FUNCTIONS END -------------#
 
@@ -530,7 +575,7 @@ if(Test-Path -LiteralPath $file -PathType Container){
             $sb_count, $sb_index = CheckFileStreams -stream $subtitle_stream -opt 2
 
             #CREATE SUBTITLE MAP
-            $subs_map = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
+            $subs_map, $intermediate_file = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
 
             $name = '"{0}"' -f $name
             Write-Host ">> File"($i+1)"..."
@@ -543,9 +588,12 @@ if(Test-Path -LiteralPath $file -PathType Container){
             #Invoke ffmpeg string
             Invoke-Expression $ffmpeg_command
             Write-Host ">> File"($i+1)"completed"
+
+            #CLEAN UP
+            CleanUpFiles -origin_file $name -olc $remove_origin -interm_file $intermediate_file -ilc $remove_temp
         }else{
             #CREATE SUBTITLE MAP
-            $subs_map = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
+            $subs_map, $intermediate_file = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
 
             $name = '"{0}"' -f $name
             Write-Host ">> File"($i+1)"..."
@@ -558,6 +606,9 @@ if(Test-Path -LiteralPath $file -PathType Container){
             #Invoke ffmpeg string
             Invoke-Expression $ffmpeg_command
             Write-Host ">> File"($i+1)"completed"
+            
+            #CLEAN UP
+            CleanUpFiles -origin_file $name -olc $remove_origin -interm_file $intermediate_file -ilc $remove_temp
         }
     }
     #clear name
@@ -605,18 +656,21 @@ if(Test-Path -LiteralPath $file -PathType Container){
         $sb_count, $sb_index = CheckFileStreams -stream $subtitle_stream -opt 2
 
         #CREATE SUBTITLE MAP
-        $subs_map = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
+        $subs_map, $intermediate_file = ExtractVideoSubs -fileName $name -vindex $vd_index -aindex $ad_index -sindex $sb_index -stream_count $not_subs_streams -jsonFile $sb_preset
 
         $name = '"{0}"' -f $name
         #Create ffmpeg string
-        $ffmpeg_command = "ffmpeg -i $name $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
+        $ffmpeg_command = "ffmpeg -ss 0 -i $name -to 60 $video_map $audio_map $subs_map $vid_opts $audio_codec -movflags faststart $output_file"
         Write-Host ">> The following FFmpeg command will be run:`n"
         Write-Host $ffmpeg_command`n
         Start-Sleep -m 1500
         Write-Host ">> Start conversion..."
         #Invoke ffmpeg string
-        #Invoke-Expression $ffmpeg_command
+        Invoke-Expression $ffmpeg_command
         Write-Host ">> DONE"
+
+        #CLEAN UP
+        CleanUpFiles -origin_file $name -olc $remove_origin -interm_file $intermediate_file -ilc $remove_temp
     }else{
         Write-Error "This file does not exist in the specified directory, please check again"
     }
