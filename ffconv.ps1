@@ -321,9 +321,9 @@ function AudOpts{
     if($h -like "aac"){ #stream copy
         $ad_string = "-c:a copy"
     }elseif(($h -like "flac") -or ($h -like "dts") -or ($h -like "ac3") -or ($h -like "eac3")){ #higher bitrate for flac/dts/ac3 releases
-        $ad_string = "-c:a aac -strict 2 -ab 192 -ac 2"
+        $ad_string = "-c:a aac -strict 2 -ab 192k -ac 2"
     }else{ #default
-        $ad_string = "-c:a aac -strict 2 -ab 128 -ac 2"
+        $ad_string = "-c:a aac -strict 2 -ab 128k -ac 2"
     }
     return $ad_map, $ad_string
 }
