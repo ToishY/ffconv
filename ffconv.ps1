@@ -99,8 +99,8 @@
         libswresample   3.  1.100 /  3.  1.100
         libpostproc    55.  1.100 / 55.  1.100
     .CREDITS
-      Made by:        YTerZ
-      Github:         https://github.com/YTerZ/ffconv
+      Made by:        ZteeY
+      Github:         https://github.com/ZteeY/ffconv
       Last modified:  10-1-2019 02:24
 #>
 
